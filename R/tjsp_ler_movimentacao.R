@@ -12,18 +12,22 @@
 #' }
 #'
 
-tjsp_ler_movimentacao <- function (arquivos = NULL, diretorio = ".") {
-  if (is.null(arquivos)) {
-    arquivos <- list.files(
-      path = diretorio,
-      pattern = ".html",
-      full.names = TRUE
-    )
-  }
+tjsp_ler_movimentacao <- function(arquivos = NULL,diretorio = ".") {
+
+   if (is.null(arquivos)){
+   arquivos <- list.files(
+    path = diretorio, pattern = ".html",
+    full.names = TRUE
+  )
+}
+
 
   purrr::map_dfr(arquivos, purrr::possibly(~{
 
+
+
     resposta <- xml2::read_html(.x)
+
 
     processo <- resposta |>
       xml2::xml_find_first("//span[contains(@class,'unj-larger')]") |>
@@ -32,53 +36,21 @@ tjsp_ler_movimentacao <- function (arquivos = NULL, diretorio = ".") {
       stringr::str_remove_all("[^\\d+\\s]") |>
       stringr::str_trim()
 
-    cd_processo <- resposta |>
-      xml2::xml_find_first("//script[contains(text(),'processo.codigo')]") |>
+   cd_processo <- resposta |>
+      xml2::xml_find_first("//script[contains(text(),'processo.codigo')]") |> 
       xml2::xml_text() |>
       stringr::str_extract("(?<=processo.codigo=)\\w+")
 
-    movs <- resposta |>
-      xml2::xml_find_first("//table/tbody[@id='tabelaTodasMovimentacoes']") |>
-      xml2::xml_find_all("./tr")
+    texto <- resposta |>
+      xml2::xml_find_first(xpath = "//table/tbody[@id='tabelaTodasMovimentacoes']")
 
-    dt_mov <- movs |>
-      xml2::xml_find_first("./td[@class='dataMovimentacao']") |>
+    data <- xml2::xml_find_all(texto, ".//td[@width='120']") |>
       xml2::xml_text(trim = TRUE) |>
       lubridate::dmy()
 
-     anexo <- movs |>
-      xml2::xml_find_first("./td[@class='descricaoMovimentacao']/a") |>
-      xml2::xml_attr("href")
+    mov <- xml2::xml_find_all(texto, ".//td[@style='vertical-align: top; padding-bottom: 5px']") |>
+      xml2::xml_text(trim = TRUE)
 
-     cd_documento <- anexo |>
-         stringr::str_extract("(?<=cdDocumento=)\\d+")
-
-
-     recurso_acessado <- anexo |>
-              stringr::str_extract("(?<=Acessado=).+") |>
-       URLdecode() |>
-       stringr::str_replace_all("\\+", " ")
-
-     url <- ifelse(is.na(anexo), NA_character_, xml2::url_absolute(anexo,"https://esaj.tjsp.jus.br"))
-
-
-    mov <- movs |>
-      xml2::xml_find_first("./td[@class='descricaoMovimentacao']") |>
-      xml2::xml_text(trim=TRUE)
-
-    tibble::tibble(
-      processo,
-      cd_processo,
-      dt_mov,
-      mov,
-      cd_documento,
-      recurso_acessado,
-      url
-    ) |>
-      tidyr::separate(
-        col = mov,
-        into = c("movimento", "descricao"),
-        sep = "\n\\s+"
-      )
-  }, otherwise = NULL), .progress = TRUE)
+    tibble::tibble(processo = processo, cd_processo = cd_processo, data = data, movimentacao = mov)
+  }, otherwise = NULL), .progress  = TRUE)
 }
